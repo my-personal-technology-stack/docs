@@ -1,0 +1,28 @@
+# Defines the services managed by Docker Compose
+services:
+  docs:
+    # Configures how the Docker image is built
+    build:
+      # Sets the build context to the current directory
+      context: .
+      # Specifies the Dockerfile path relative to the build context
+      dockerfile: docker/Dockerfile
+
+    # Sets the image name and tag
+    image: docs:local
+
+    # Sets a custom name for the container
+    container_name: docs
+
+    # Maps the host port to the container port
+    ports:
+      - "8082:80"
+    # # Connects the container to the specified Docker network
+    # networks:
+    #   - docs
+
+    # # Defines the Docker networks used by the services
+    # networks:
+    #   # Creates a dedicated bridge network for the documentation service
+    #   docs:
+    #     driver: bridge
