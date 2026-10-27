@@ -54,7 +54,7 @@ link = "https://github.com/my-personal-technology-stack/docs"
 "Overview" = ["overview/architecture.md"]
 
 [[project.nav]]
-"Getting Started" = ["getting-started/installation.md"]
+"Getting Started" = ["getting-started/installation.md", "getting-started/reuse-in-another-project.md"]
 
 [[project.nav]]
 "Maintenance" = ["maintenance/updates.md"]
