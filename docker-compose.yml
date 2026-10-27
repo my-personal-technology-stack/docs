@@ -8,6 +8,11 @@ services:
       # Specifies the Dockerfile path relative to the build context
       dockerfile: docker/Dockerfile
 
+      # Passes tool versions to the Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+        NGINX_VERSION: ${NGINX_VERSION}
+        ZENSICAL_VERSION: ${ZENSICAL_VERSION}
     # Sets the image name and tag
     image: docs:local
 

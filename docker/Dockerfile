@@ -1,5 +1,6 @@
-# Defines tool versions
-ARG PYTHON_VERSION=3.12-slim
+
+# Defines default tool versions
+ARG PYTHON_VERSION=3.12
 ARG NGINX_VERSION=1.27-alpine
 ARG ZENSICAL_VERSION=0.0.73
 

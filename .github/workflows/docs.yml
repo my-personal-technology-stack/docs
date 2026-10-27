@@ -1,0 +1,180 @@
+
+# Defines the reusable documentation workflow
+name: Documentation
+
+# Allows this workflow to be called by another workflow
+on:
+  workflow_call:
+    # Defines the inputs accepted from the calling workflow
+    inputs:
+      # Controls whether the documentation is deployed to GitHub Pages
+      deploy_pages:
+        description: Deploy documentation to GitHub Pages
+        type: boolean
+        required: false
+        default: false
+
+# Defines the permissions granted to this workflow
+permissions:
+  # Allows the workflow to read repository contents
+  contents: read
+  # Allows the workflow to publish GitHub Pages artifacts
+  pages: write
+  # Allows the workflow to authenticate with GitHub Pages
+  id-token: write
+
+jobs:
+  # Builds and validates the documentation
+  build:
+    name: Build and validate documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks out the repository source code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Loads the tool versions defined in the root .env file
+      - name: Load tool versions
+        shell: bash
+        run: |
+          # Loads the environment variables from the repository .env file
+          source .env
+
+          # Extracts the Python version required by setup-python
+          echo "PYTHON_VERSION=${PYTHON_VERSION%%-*}" >> "$GITHUB_ENV"
+
+          # Makes the Zensical version available to subsequent steps
+          echo "ZENSICAL_VERSION=$ZENSICAL_VERSION" >> "$GITHUB_ENV"
+
+      # Installs the configured Python version on the GitHub runner
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Installs the exact Zensical version defined in .env
+      - name: Install Zensical
+        run: pip install "zensical==${ZENSICAL_VERSION}"
+
+      # Generates the static documentation website
+      - name: Build documentation
+        working-directory: files
+        run: zensical build --clean
+
+      # Fails if the generated website does not contain an index page
+      - name: Verify generated website
+        run: test -s files/site/index.html
+
+      # Uploads the generated website when deployment is requested
+      - name: Upload Pages artifact
+        if: inputs.deploy_pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Specifies the directory containing the generated website
+          path: files/site
+
+  # Builds the Docker image and checks that the website responds
+  docker:
+    name: Build and test Docker image
+    runs-on: ubuntu-latest
+
+    # Runs the Docker test only after the documentation build succeeds
+    needs: build
+
+    steps:
+      # Checks out the repository source code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Loads the Docker and Zensical versions from .env
+      - name: Load tool versions
+        shell: bash
+        run: |
+          # Loads the environment variables from the repository .env file
+          source .env
+
+          # Makes the configured image versions available to Docker
+          echo "PYTHON_VERSION=$PYTHON_VERSION" >> "$GITHUB_ENV"
+          echo "NGINX_VERSION=$NGINX_VERSION" >> "$GITHUB_ENV"
+          echo "ZENSICAL_VERSION=$ZENSICAL_VERSION" >> "$GITHUB_ENV"
+
+      # Builds the documentation image using the configured versions
+      - name: Build Docker image
+        run: |
+          docker build \
+            --file docker/Dockerfile \
+            --build-arg PYTHON_VERSION="$PYTHON_VERSION" \
+            --build-arg NGINX_VERSION="$NGINX_VERSION" \
+            --build-arg ZENSICAL_VERSION="$ZENSICAL_VERSION" \
+            --tag docs:test \
+            .
+
+      # Starts a container from the image built in the previous step
+      - name: Start container
+        run: docker run -d --name docs-test -p 8082:80 docs:test
+
+      # Checks that the website responds successfully over HTTP
+      - name: Verify container and HTTP response
+        shell: bash
+        run: |
+          # Retries the HTTP request while Nginx starts
+          for i in $(seq 1 15); do
+            if curl --fail --silent http://localhost:8082/ -o /dev/null; then
+              echo "Documentation website is responding"
+              exit 0
+            fi
+
+            # Waits before retrying the HTTP request
+            sleep 2
+          done
+
+          # Displays container logs if the HTTP check fails
+          docker logs docs-test
+          exit 1
+
+      # Removes the test container even if a previous step fails
+      - name: Stop container
+        if: always()
+        run: docker rm -f docs-test || true
+
+  # Publishes the website only when explicitly requested
+  deploy:
+    name: Deploy documentation
+
+    # Requires both the documentation build and Docker test to succeed
+    needs: [build, docker]
+
+    # Skips deployment when deploy_pages is false
+    if: inputs.deploy_pages
+
+    runs-on: ubuntu-latest
+
+    # Associates the deployment with the GitHub Pages environment
+    environment:
+      name: github-pages
+      # Displays the deployed website URL in the workflow summary
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # Publishes the previously uploaded Pages artifact
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+        id: deployment
+
+
+
+# Example: Reuse this workflow in another project
+#
+# Add the following job to the project's CI workflow:
+#
+# jobs:
+#   docs:
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     uses: my-personal-technology-stack/docs/.github/workflows/docs.yml@v1.1.0
+#     with:
+#       deploy_pages: true
+#     permissions:
+#       contents: read
+#       pages: write
+#       id-token: write
