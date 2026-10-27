@@ -1,20 +1,25 @@
-
-# Defines the reusable documentation workflow
+# Defines the documentation workflow
 name: Documentation
 
-# Allows this workflow to be called by another workflow
+# Runs automatically in this repository or can be called by another workflow
 on:
+  # Runs the workflow on pushes to the main branch
+  push:
+    branches:
+      - main
+
+  # Allows other projects to reuse this workflow
   workflow_call:
     # Defines the inputs accepted from the calling workflow
     inputs:
-      # Controls whether the documentation is deployed to GitHub Pages
+      # Controls whether the calling project deploys to GitHub Pages
       deploy_pages:
         description: Deploy documentation to GitHub Pages
         type: boolean
         required: false
         default: false
 
-# Defines the permissions granted to this workflow
+# Defines the permissions required by the workflow
 permissions:
   # Allows the workflow to read repository contents
   contents: read
@@ -30,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checks out the repository source code
+      # Checks out the repository that triggered or called the workflow
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -41,13 +46,13 @@ jobs:
           # Loads the environment variables from the repository .env file
           source .env
 
-          # Extracts the Python version required by setup-python
+          # Makes the Python version available to subsequent steps
           echo "PYTHON_VERSION=${PYTHON_VERSION%%-*}" >> "$GITHUB_ENV"
 
           # Makes the Zensical version available to subsequent steps
           echo "ZENSICAL_VERSION=$ZENSICAL_VERSION" >> "$GITHUB_ENV"
 
-      # Installs the configured Python version on the GitHub runner
+      # Installs the configured Python version
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -66,20 +71,18 @@ jobs:
       - name: Verify generated website
         run: test -s files/site/index.html
 
-      # Uploads the generated website when deployment is requested
+      # Uploads the website when deployment is enabled
+      # Deployment is automatic on pushes to main in this repository
       - name: Upload Pages artifact
-        if: inputs.deploy_pages
+        if: github.event_name == 'push' || inputs.deploy_pages
         uses: actions/upload-pages-artifact@v3
         with:
-          # Specifies the directory containing the generated website
           path: files/site
 
   # Builds the Docker image and checks that the website responds
   docker:
     name: Build and test Docker image
     runs-on: ubuntu-latest
-
-    # Runs the Docker test only after the documentation build succeeds
     needs: build
 
     steps:
@@ -138,35 +141,31 @@ jobs:
         if: always()
         run: docker rm -f docs-test || true
 
-  # Publishes the website only when explicitly requested
+  # Publishes the website to GitHub Pages when deployment is enabled
   deploy:
     name: Deploy documentation
-
-    # Requires both the documentation build and Docker test to succeed
     needs: [build, docker]
 
-    # Skips deployment when deploy_pages is false
-    if: inputs.deploy_pages
+    # Deploys automatically on pushes to main or when requested by the caller
+    if: github.event_name == 'push' || inputs.deploy_pages
 
     runs-on: ubuntu-latest
 
     # Associates the deployment with the GitHub Pages environment
     environment:
       name: github-pages
-      # Displays the deployed website URL in the workflow summary
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       # Publishes the previously uploaded Pages artifact
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
         id: deployment
+        uses: actions/deploy-pages@v4
 
-
-
-# Example: Reuse this workflow in another project
+# Example: Reuse this workflow from another project's CI workflow
 #
-# Add the following job to the project's CI workflow:
+# Add the following job to the calling project's workflow.
+# Do not uncomment this block in this file.
 #
 # jobs:
 #   docs:

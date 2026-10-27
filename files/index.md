@@ -24,6 +24,10 @@ Learn how to maintain and update the documentation.
 
 - [Updates and Best Practices](maintenance/updates.md) — Update tool versions, rebuild the website, and maintain the documentation environment.
 
+### ReUse 
+
+- [Reuse in Another Project](getting-started/reuse-in-another-project.md) — Use this repository as a template or call its reusable GitHub Actions workflow.
+
 ## Quick Start
 
 Start the documentation locally from the repository root:
